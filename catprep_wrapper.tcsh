@@ -6,7 +6,7 @@ echo
 echo Wrapper Started at:
 echo $startTime
 echo
-echo Version 0.2 Skeleton Code, takes input arguments and echos output 
+echo Version 1.0  
 echo
 echo This Wrapper will wrap around and run:
 echo 1\) catprep 
@@ -41,9 +41,9 @@ if ($# < 2) then
         echo ""
         echo "ERROR: not enough arguments:"
         echo Mode 2 call:
-        echo ./catprep_wrapper.tcsh 2 input_afList.txt \<versionID\> \<mdexInputPath\> \<af_InputPath\> \<msk_InputPath\> \<OutputPath\>
+        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
         echo Mode 3 call:
-        echo ./catprep_wrapper.tcsh 3 TileName \<versionID\> \<mdexInputPath\> \<af_InputPath\> \<msk_InputPath\> \<OutputPath\>
+        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
         echo
         echo Exiting...
         exit
@@ -126,9 +126,9 @@ else
 	echo
         echo "ERROR mode 2, or 3 not selected"
         echo "Mode 2 call:"
-        echo ./catprep_wrapper.tcsh 2 inputList.txt \<RadecID\> \<mdex_path\> \<OutputPath\>        
+        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
 	echo "Mode 3 call:"
-        echo ./catprep_wrapper.tcsh 3 TileName \<RadecID\> \<mdex_path\> \<OutputPath\> 	
+        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'	
 	echo
         echo Exiting...
 	exit
@@ -174,7 +174,6 @@ Mode2:
                 echo  Done waiting
         endif
 		echo
-                echo catprep_wrapper for $RadecID done
             
             echo ====================================== - END catprep_wrapper wrapper loop iteration - =======================================
     end
@@ -189,32 +188,32 @@ Mode2:
 
 Mode3:	
 	set RaRaRa = `echo $RadecID | awk '{print substr($0,0,3)}'`
-
-	  # TODO call IDL script for Catalog output
-	  # TODO call IDL script Reject output
 	
+	# Get the gzipped mdex file
 	set mdex_name = `ls -tr1 ${mdex_path} | grep ${RadecID} | tail -1`
 	set mdex_tile = ${mdex_path}/${mdex_name}
 	echo "mdex_tile = ${mdex_tile}" 
-	
+
+	# Parse the ${mdex_tile}
 	set tempSize = `basename $mdex_tile  | awk '{print length($0)}'`
-        @ tempIndex = ($tempSize - 3 - 3) 
+        @ tempIndex = ($tempSize - 3 - 4) 
 	set edited_mdexName = `basename $mdex_tile | awk -v endIndex=$tempIndex '{print substr($0,0,endIndex)}'`	
         @ tempIndex = ($tempIndex - 2 - 4 - 2) 
 	set RestOfTablename = `basename $mdex_tile | awk -v endIndex=$tempIndex '{print substr($0,9,endIndex)}'`
-	
 	echo edited_mdexName = $edited_mdexName
 	echo RestOfTablename = $RestOfTablename
-
-#	gunzip -f -c -k ${mdex_tile} > ${OutputPath}
-#	set mdex_name = `ls -tr1 ${OutputPath} | grep ${RadecID} | tail -1`
-#	set mdex_tile = ${OutputPath}/${mdex_name}
-#	echo "UPDATED mdex_tile = ${mdex_tile}" 
 	
+	# Unzip the gzipped ${mdex_tile}
+	echo Unzipping ${mdex_tile} to ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl
+	gunzip -f -c -k ${mdex_tile} > ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl  # Unzip mdex file
+
+	# Set mdex_name to unzipped mdex file
+	set mdex_name = `ls -tr1 ${catalog_tile_name} | grep ${RadecID} | tail -1`
+	set mdex_tile = ${catalog_tile_name}/${mdex_name}
 
 	#echo "catprep -i $mdex_tile -c $catalog_tile_name -r $reject_file_name"
 	#/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name -r $reject_file_name
-
+	echo "/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rj_${Version}"
 	/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rj_${Version}
 
 	goto Mode3_Done #gzip_done
@@ -232,11 +231,8 @@ Mode3_Done:
 echo catprep_wrapper on ${RadecID} Mode: ${1} Done
 set endTime = `date '+%m/%d/%Y %H:%M:%S'`
 #rm af file and rm original mdex table
-#TODO:
-# change arguments to 3 input directories:
-# ab_masks, af, mdex tables,
-# these 3 types of tiles in different directories
-# ab, af, mdex
+echo "rm -f ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl"
+rm -f ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl
 echo
        #rsync step
 	if($rsyncSet == "true") then
