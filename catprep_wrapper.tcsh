@@ -196,9 +196,9 @@ Mode3:
 
 	# Parse the ${mdex_tile}
 	set tempSize = `basename $mdex_tile  | awk '{print length($0)}'`
-        @ tempIndex = ($tempSize - 3 - 4) 
+        @ tempIndex = ($tempSize - 3 - 4 - 2) 
 	set edited_mdexName = `basename $mdex_tile | awk -v endIndex=$tempIndex '{print substr($0,0,endIndex)}'`	
-        @ tempIndex = ($tempIndex - 2 - 4 - 2) 
+        @ tempIndex = ($tempIndex - 2 - 4 - 2 - 2) 
 	set RestOfTablename = `basename $mdex_tile | awk -v endIndex=$tempIndex '{print substr($0,9,endIndex)}'`
 	echo edited_mdexName = $edited_mdexName
 	echo RestOfTablename = $RestOfTablename
@@ -211,10 +211,16 @@ Mode3:
 	set mdex_name = `ls -tr1 ${catalog_tile_name} | grep ${RadecID} | tail -1`
 	set mdex_tile = ${catalog_tile_name}/${mdex_name}
 
-	#echo "catprep -i $mdex_tile -c $catalog_tile_name -r $reject_file_name"
-	#/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name -r $reject_file_name
-	echo "/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rj_${Version}"
-	/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rj_${Version}
+	echo "/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rej_${Version}"
+	/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rej_${Version}
+	set saved_status = $? # Error Checking
+	echo catprep return status == ${saved_status}
+        if($saved_status != 0) then #if program failed, status != 0
+                echo Failure detected on tile ${RadecID}
+                set failedProgram = "catprep"
+                goto Failed
+        endif
+	echo
 
 	goto Mode3_Done #gzip_done
 
@@ -307,9 +313,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
         if($currIP == "137.78.30.21") then #Tyto
 		if($saved_status <= 32) then #status <= 32, WARNING 
 			echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} 	
-			touch /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt
-			echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt 	
-               		echo WARNING output to error log: /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt
+			echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt 	
+               		echo WARNING output to error log: /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt
 			if($rsyncSet == "true") then #rsync to other machines
 	 	       	       #Transfer Tyto ErrorLogsTyto/ dir to Otus
                	 		echo rsync Tyto\'s /Volumes/tyto2/ErrorLogsTyto/ to Otus /Volumes/otus2/ErrorLogsTyto/
@@ -324,9 +330,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
 			exit
 		else if($saved_status > 32) then #status > 32, ERROR
 			echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} 
-			touch /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt
-	                echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt
-               		echo ERROR output to error log: /Volumes/tyto2/ErrorLogsTyto/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt
+	                echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt
+               		echo ERROR output to error log: /Volumes/tyto2/ErrorLogsTyto/errorlog_catprep_wrapper_${startTime}.txt
 			if($rsyncSet == "true") then #rsync to other machines
 	 	       	       #Transfer Tyto ErrorLogsTyto/ dir to Otus
                	 		echo rsync Tyto\'s /Volumes/tyto2/ErrorLogsTyto/ to Otus /Volumes/otus2/ErrorLogsTyto/
@@ -343,9 +349,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
 	else if($currIP == "137.78.80.75") then  #Otus
 		if($saved_status <= 32) then #status <= 32, WARNING
 			echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} 
-			touch /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
-                	echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
-               		echo WARNING output to error log: /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
+                	echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}  >> /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
+               		echo WARNING output to error log: /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
 	
 			if($rsyncSet == "true") then #rsync to other machines
 	                       #Transfer Otus ErrorLogsOtus/ dir to Tyto
@@ -361,9 +367,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
 			exit
 		else if($saved_status > 32) then #status > 32, ERROR
                         echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}
-			touch /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
-                        echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
-                        echo ERROR output to error log: /Volumes/otus1/ErrorLogsOtus/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
+                        echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
+                        echo ERROR output to error log: /Volumes/otus1/ErrorLogsOtus/errorlog_catprep_wrapper_${startTime}.txt
 			if($rsyncSet == "true") then #rsync to other machines
 	                       #Transfer Otus ErrorLogsOtus/ dir to Tyto
        		         	echo rsync Otus\'s /Volumes/otus1/ErrorLogsOtus/ to Tyto /Volumes/tyto1/ErrorLogsOtus/
@@ -380,9 +386,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
 	else if($currIP == "137.78.80.72") then  #Athene
                 if($saved_status <= 32) then #status <= 32, WARNING
                         echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}
-			touch /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
-                        echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
-                        echo WARNING output to error log: /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
+                        echo WARNING ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
+                        echo WARNING output to error log: /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
                 	
 			if($rsyncSet == "true") then #rsync to other machines
                  	       #Transfer Athene ErrorLogsAthene/ dir to Tyto
@@ -398,9 +404,9 @@ echo exit status of ${failedProgram} for tile \[${RadecID}\]\: ${saved_status}
 			exit
                 else if($saved_status > 32) then #status > 32, ERROR
                         echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status}
-			touch /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
-                        echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
-                        echo ERROR output to error log: /Volumes/athene3/ErrorLogsAthene/errorlog_IRSAWrapper_${startTime}.txt
+			touch /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
+                        echo ERROR ${failedProgram} on tile \[$RadecID\] exited with status ${saved_status} >> /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
+                        echo ERROR output to error log: /Volumes/athene3/ErrorLogsAthene/errorlog_catprep_wrapper_${startTime}.txt
                 	if($rsyncSet == "true") then #rsync to other machines
                  	       #Transfer Athene ErrorLogsAthene/ dir to Tyto
                       	  	echo rsync Athene\'s /Volumes/athene3/ErrorLogsAthene/ to Tyto /Volumes/CatWISE3/ErrorLogsAthene/
