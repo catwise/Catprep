@@ -8,6 +8,9 @@ c                  separate S/N threshold; removed cc_flags from catalog
 c                  decision
 c     1.2  B90124: fixed bug in output "\Nsrc" line; added table header
 c                  line identifying version and date/time of run
+c     1.3  B90202: added option "-t" to intercept table header line with
+c                  "\ artifact bitmasks from", replace pathname with
+c                  "/Volumes/tyto1/Ab_masks_v1/unwise-<tileID>-msk.fits"
 c
 c=======================================================================
 c
@@ -16,11 +19,12 @@ c
 c
       Character*5000 Line, OutLine
       Character*500  InFNam, OutCnam, OutRnam, NLnam
+      Character*50   MaskPath
       Character*25   Field(MaxFld)
       Character*21   NamStr
       Character*20   names(250000), nam! dynamic allocation won't work
       Character*11   Vsn, NumStr
-      Character*8    CDate, CTime
+      Character*8    CDate, CTime, tileID
       Character*4    Flag, Flag0
       Real *8        wsnr, minw1snr, minw2snr, ra, dec, minw1w2snr
       Integer*4      IArgC, LNBlnk, nHead, nArg, nArgs, IFa(MaxFld),
@@ -28,16 +32,19 @@ c
      +               nRout, nNamCollisn, nAppChar, wccmap, wabmap,
      +               nCol1, LenHdrNsrc
       Logical*4      NeedHelp, SanityChk, GotIn, GotOut1, GotOut2, dbg,
-     +               GoCat, Good1, Good2, Good12
+     +               GoCat, Good1, Good2, Good12, DoMaskNam
 c
-      Data Vsn/'1.2  B90124'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.3  B90202'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
-     +     minw1snr,minw2snr/2*5.0d0/, ncol1/3/, LenHdrNsrc/14/
+     +     minw1snr,minw2snr/2*5.0d0/, ncol1/3/, LenHdrNsrc/14/,
+     +     DoMaskNam/.false./, tileID/'DayNinny'/,
+     +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/
 c
       Common / VDT / CDate, CTime, Vsn
 c
-      namelist / catprepin / minw1snr, minw1w2snr, minw2snr, ncol1
+      namelist / catprepin / MaskPath, minw1snr, minw1w2snr, minw2snr,
+     +                       ncol1
 c
 c=======================================================================
 c
@@ -60,6 +67,7 @@ c
         print *,'    -s2  minimum w2snr (5)'
         print *,'    -s12 minimum snr in w1 & w2 together (5)'
         print *,'    -n   name of a catprepin namelist file'
+        print *,'    -t   tile ID for use in bitmask name'
         print *,'    -n1  f1rst mdex column to keep in output (3)'
         print *,'    -d   enable debug mode'
         Print *
@@ -160,7 +168,13 @@ c
         read (NumStr, *, err=3008) minw1w2snr
         if (dbg) print *, 'minimum w1w2snr:', minw1w2snr
 c
-        Else
+      else if (Flag .eq. '-T') then
+        call NextNarg(NArg,Nargs)
+        call GetArg(NArg,tileID)
+        doMaskNam = .true.
+        if (dbg) print *, 'tile ID:', tileID
+c
+      Else
         print *,'ERROR: unrecognized command-line specification: '
      +          //Flag0
       end if
@@ -213,6 +227,15 @@ c
 c                                      ! process header lines
 10    read (10, '(a)', end=1000) Line
       if (Line(1:1) .eq. '\') then
+        if (doMaskNam) then
+          if (index(Line,'artifact bitmasks from') .gt. 0) then
+            Line = '\ artifact bitmasks from '
+     +              //MaskPath(1:lnblnk(MaskPath))//'unwise-'
+     +              //tileID//'-msk.fits'
+            if (dbg) print *,'Header bitmask line: "'
+     +          //Line(1:lnblnk(Line))//'"'
+          end if
+        end if
         write(20,'(a)') Line(1:lnblnk(Line))
         write(22,'(a)') Line(1:lnblnk(Line))
         if ((index(Line,'\Nsrc =') .gt. 0) .and. (nSrcHdr .lt. 0)) then
@@ -221,7 +244,7 @@ c                                      ! process header lines
           read (Line(n:lnblnk(Line)), *, err = 3002) nSrcHdr
           if (dbg) print *,'Header \nSrc line: "'
      +        //Line(1:lnblnk(Line))//'"'
-        end if
+        end if        
         go to 10
       end if
       if (Line(1:1) .eq. '|') then
