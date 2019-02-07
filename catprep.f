@@ -11,6 +11,11 @@ c                  line identifying version and date/time of run
 c     1.3  B90202: added option "-t" to intercept table header line with
 c                  "\ artifact bitmasks from", replace pathname with
 c                  "/Volumes/tyto1/Ab_masks_v1/unwise-<tileID>-msk.fits"
+c     1.4  B90207: added IRSA-formatted output options "-ci" and "-ri";
+c                  decoupled the four output options; coded final column
+c                  retention; added "-v" option for 2-char version ID to
+c                  be imnplanted into "source_id"; removed "-n1" option;
+c                  added "glon" & "glat" to end of data rows
 c
 c=======================================================================
 c
@@ -18,57 +23,67 @@ c
                      Parameter (MaxFld = 1000)
 c
       Character*5000 Line, OutLine
-      Character*500  InFNam, OutCnam, OutRnam, NLnam
+      Character*500  InFNam, OutCnam, OutRnam, OutCInam, OutRInam, NLnam
       Character*50   MaskPath
-      Character*25   Field(MaxFld)
+      Character*25   Field(MaxFld), FieldC(MaxFld), FieldR(MaxFld)
+      Character*24   GalStr
       Character*21   NamStr
       Character*20   names(250000), nam! dynamic allocation won't work
       Character*11   Vsn, NumStr
       Character*8    CDate, CTime, tileID
       Character*4    Flag, Flag0
-      Real *8        wsnr, minw1snr, minw2snr, ra, dec, minw1w2snr
+      Character*2    vc
+      Real *8        wsnr, minw1snr, minw2snr, ra, dec, minw1w2snr,
+     +               GaLong, GaLat 
       Integer*4      IArgC, LNBlnk, nHead, nArg, nArgs, IFa(MaxFld),
      +               IFb(MaxFld), NF, nSrcHdr, n, k, i, nSrc, nCout,
      +               nRout, nNamCollisn, nAppChar, wccmap, wabmap,
-     +               nCol1, LenHdrNsrc
+     +               LenHdrNsrc, IFaC(MaxFld), IFbC(MaxFld), NFC,
+     +               IFaR(MaxFld), IFbR(MaxFld), NFR
       Logical*4      NeedHelp, SanityChk, GotIn, GotOut1, GotOut2, dbg,
-     +               GoCat, Good1, Good2, Good12, DoMaskNam
+     +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
+     +               GotOutI2
 c
-      Data Vsn/'1.3  B90202'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.4  B90207'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
-     +     minw1snr,minw2snr/2*5.0d0/, ncol1/3/, LenHdrNsrc/14/,
+     +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
      +     DoMaskNam/.false./, tileID/'DayNinny'/,
-     +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/
+     +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/,
+     +     GotOutI1,GotOutI2/2*.false./
 c
       Common / VDT / CDate, CTime, Vsn
 c
       namelist / catprepin / MaskPath, minw1snr, minw1w2snr, minw2snr,
-     +                       ncol1
+     +                       vc
 c
 c=======================================================================
 c
       nArgs = IArgc()
-      NeedHelp = (nArgs .lt. 6)
+      NeedHelp = (nArgs .lt. 4)
 1     If (NeedHelp) then
         print *,'catprep vsn ', Vsn
         print *
 
         print *,'Usage: catprep <flags specifications>'
         print *
-        print *,'Where the REQUIRED flags and specifications are:'
-        print *,
-     +   '    -i  name of a final tile mdex file'
+        print *,'Where the following specification is REQUIRED:'
+        print *,'    -i  name of a final tile mdex file'
+        print *
+        print *,'and at least one of the following flags and '
+     +        //'specifications is REQUIRED:'
         print *,'    -c  name of the output CatWISE catalog file'
         print *,'    -r  name of the output CatWISE reject file'
+        print *,'    -ci name of the output iRSA CatWISE catalog file'
+        print *,'    -ri name of the output IRSA CatWISE reject file'
         print *
         print *,'The OPTIONAL flags are:'
+        print *,'    -v   2-char version code ("a0")'
         print *,'    -s1  minimum w1snr (5)'
         print *,'    -s2  minimum w2snr (5)'
         print *,'    -s12 minimum snr in w1 & w2 together (5)'
         print *,'    -n   name of a catprepin namelist file'
         print *,'    -t   tile ID for use in bitmask name'
-        print *,'    -n1  f1rst mdex column to keep in output (3)'
         print *,'    -d   enable debug mode'
         Print *
         stop
@@ -129,6 +144,32 @@ c
         end if
         GotOut2 = .true.
 c
+      else if (Flag .eq. '-CI') then
+        call NextNarg(NArg,Nargs)
+        Call GetArg(NArg,OutCINam)
+        if (Access(OutCInam(1:LNBlnk(OutCInam)),' ') .eq. 0) then
+          print *
+          print *,'ERROR: Output file already exists: ', 
+     +             OutCInam(1:LNBlnk(OutCInam))
+          print *
+          NeedHelp = .True.
+          Go to 1
+        end if
+        GotOutI1 = .true.
+c
+      else if (Flag .eq. '-RI') then
+        call NextNarg(NArg,Nargs)
+        Call GetArg(NArg,OutRINam)
+        if (Access(OutRInam(1:LNBlnk(OutRInam)),' ') .eq. 0) then
+          print *
+          print *,'ERROR: Output file already exists: ', 
+     +             OutRInam(1:LNBlnk(OutRInam))
+          print *
+          NeedHelp = .True.
+          Go to 1
+        end if
+        GotOutI2 = .true.
+c
       else if (Flag .eq. '-N') then
         call NextNarg(NArg,Nargs)
         Call GetArg(NArg,NLNam)
@@ -144,35 +185,34 @@ c
         write (6, catprepin)
         close(10)
 c
-      else if (Flag .eq. '-N1') then
+      else if (Flag .eq. '-V') then
         call NextNarg(NArg,Nargs)
-        call GetArg(NArg,NumStr)
-        read (NumStr, *, err=3007) ncol1
-        if (dbg) print *, 'first mdex column to keep:', ncol1
+        call GetArg(NArg,vc)
+        if (dbg) print *, 'version code: ', vc
 c
       else if (Flag .eq. '-S1') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3007) minw1snr
-        if (dbg) print *, 'minimum w1snr:', minw1snr
+        if (dbg) print *, 'minimum w1snr: ', minw1snr
 c
       else if (Flag .eq. '-S2') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3008) minw2snr
-        if (dbg) print *, 'minimum w2snr:', minw2snr
+        if (dbg) print *, 'minimum w2snr: ', minw2snr
 c
       else if (Flag .eq. '-S12') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,NumStr)
         read (NumStr, *, err=3008) minw1w2snr
-        if (dbg) print *, 'minimum w1w2snr:', minw1w2snr
+        if (dbg) print *, 'minimum w1w2snr: ', minw1w2snr
 c
       else if (Flag .eq. '-T') then
         call NextNarg(NArg,Nargs)
         call GetArg(NArg,tileID)
         doMaskNam = .true.
-        if (dbg) print *, 'tile ID:', tileID
+        if (dbg) print *, 'tile ID: ', tileID
 c
       Else
         print *,'ERROR: unrecognized command-line specification: '
@@ -185,13 +225,8 @@ c
         NeedHelp = .True.
         Go to 1
       end if
-      if (.not.GotOut1) then
-        print *, 'ERROR: no output catalog file specified ("-c")'
-        NeedHelp = .True.
-        Go to 1
-      end if
-      if (.not.GotOut2) then
-        print *, 'ERROR: no output reject file specified ("-c")'
+      if (.not.(GotOut1 .or. GotOut2 .or. GotOutI1 .or. GotOutI2)) then
+        print *, 'ERROR: no output files specified'
         NeedHelp = .True.
         Go to 1
       end if
@@ -222,8 +257,10 @@ c                                      ! verify some fields in mdex file
         call ChkFld(Field(11),'w2y',11)
       end if
 c
-      open(20, file = OutCnam)
-      open(22, file = OutRnam)
+      if (GotOut1)  open(20, file = OutCnam)
+      if (GotOut2)  open(22, file = OutRnam)
+      if (GotOutI1) open(24, file = OutCInam)
+      if (GotOutI2) open(26, file = OutRInam)
 c                                      ! process header lines
 10    read (10, '(a)', end=1000) Line
       if (Line(1:1) .eq. '\') then
@@ -236,8 +273,8 @@ c                                      ! process header lines
      +          //Line(1:lnblnk(Line))//'"'
           end if
         end if
-        write(20,'(a)') Line(1:lnblnk(Line))
-        write(22,'(a)') Line(1:lnblnk(Line))
+        if (GotOut1) write(20,'(a)') Line(1:lnblnk(Line))
+        if (GotOut2) write(22,'(a)') Line(1:lnblnk(Line))
         if ((index(Line,'\Nsrc =') .gt. 0) .and. (nSrcHdr .lt. 0)) then
           LenHdrNsrc = lnblnk(Line)
           n = index(Line,'=') + 1
@@ -250,38 +287,76 @@ c                                      ! process header lines
       if (Line(1:1) .eq. '|') then
         nHead = nHead + 1
         if (nHead .eq. 1) then
-          write(20,'(a)') '\ catprep vsn '//Vsn//' run on '
+          if (GotOut1) write(20,'(a)') '\ catprep vsn '//Vsn//' run on '
      +                  //CDate//' at '//CTime
-          write(22,'(a)') '\ catprep vsn '//Vsn//' run on '
+          if (GotOut2) write(22,'(a)') '\ catprep vsn '//Vsn//' run on '
      +                  //CDate//' at '//CTime
-          OutLine = '|    source_name     '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(204))//'|'
-          write(22,'(a)') OutLine(1:lnblnk(OutLine))
-          OutLine = '|    source_name     '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(203))//'|'
-          write(20,'(a)') OutLine(1:lnblnk(OutLine))
+          Line(IFa(8):IFb(8)) = '|   wx   '
+          Line(IFa(9):IFb(9)) = '|   wy   '
+          OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
+     +           //'|    glon   |    glat   |'
+          if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
+          call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
+          OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +           //'|    glon   |    glat   |'
+          if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
+          call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
         end if
         if (nHead .eq. 2) then 
-          OutLine = '|        char        '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(204))//'|'
-          write(22,'(a)') OutLine(1:lnblnk(OutLine))
-          OutLine = '|        char        '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(203))//'|'
-          write(20,'(a)') OutLine(1:lnblnk(OutLine))
+          OutLine = '|        char        '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
+     +           //'|  double   |  double   |'
+          if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
+          OutLine = '|        char        '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +           //'|  double   |  double   |'
+          if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
-        if ((nHead .eq. 3) .or. (nHead .eq. 4))  then 
-          OutLine = '|         --         '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(204))//'|'
-          write(22,'(a)') OutLine(1:lnblnk(OutLine))
-          OutLine = '|         --         '//Line(IFa(ncol1):IFb(34))
-     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +           //Line(IFa(135):IFb(203))//'|'
-          write(20,'(a)') OutLine(1:lnblnk(OutLine))
+        if (nHead .eq. 3) then 
+          OutLine = '|         --         '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
+     +           //'|    deg    |    deg    |'
+          if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
+          OutLine = '|         --         '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +           //'|    deg    |    deg    |'
+          if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
+        end if
+        if (nHead .eq. 4) then 
+          OutLine = '|         --         '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
+     +           //'|     --    |     --    |'
+          if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
+          OutLine = '|         --         '//Line(IFa(1):IFb(1))
+     +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +           //'|     --    |     --    |'
+          if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         go to 10
       end if
@@ -306,8 +381,14 @@ c                                      ! Generate sexagesimal name
 120     continue
       end if
       names(nSrc) = nam
-c
       NamStr = ' '//nam
+c                                      ! get galactic coordinates
+      call Cel2Gal(ra, dec, GaLong, GaLat)
+      write(GalStr,'(2f12.6)') GaLong, GaLat
+c                                      ! implant version code
+      k = index(Line,'-')
+      Line(k+3:k+9) = Line(k:k+6)
+      Line(k:k+2) = '_'//vc
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Check eligibility for catalog
@@ -317,12 +398,6 @@ c                                      ! Check eligibility for catalog
       else
         wsnr = 0.0d0
       end if
-c     k = 194
-c     if (index(Line(IFA(k):IFB(k)),'null') .eq. 0) then
-c       Read(Line(IFA(k):IFB(k)), *, err = 3001) wccmap
-c     else
-c       wccmap = 0
-c     end if
       k = 200
       if (index(Line(IFA(k):IFB(k)),'null') .eq. 0) then
         Read(Line(IFA(k):IFB(k)), *, err = 3001) wabmap
@@ -330,8 +405,6 @@ c     end if
         wabmap = 0
       end if
       Good1 = (wsnr .ge. minw1snr) .and. (wabmap .eq. 0)
-c     Good1 = (wsnr .ge. minw1snr) .and. (wccmap .eq. 0)
-c    +                             .and. (wabmap .eq. 0)
 c
       Good12 = (wsnr .ge. minw1w2snr) .and. (wabmap .eq. 0)
       k = 21
@@ -340,12 +413,6 @@ c
       else
         wsnr = 0.0d0
       end if
-c     k = 196
-c     if (index(Line(IFA(k):IFB(k)),'null') .eq. 0) then
-c       Read(Line(IFA(k):IFB(k)), *, err = 3001) wccmap
-c     else
-c       wccmap = 0
-c     end if
       k = 202
       if (index(Line(IFA(k):IFB(k)),'null') .eq. 0) then
         Read(Line(IFA(k):IFB(k)), *, err = 3001) wabmap
@@ -353,24 +420,67 @@ c     end if
         wabmap = 0
       end if
       Good2 = (wsnr .ge. minw2snr) .and. (wabmap .eq. 0)
-c     Good2 = (wsnr .ge. minw2snr) .and. (wccmap .eq. 0)
-c    +                             .and. (wabmap .eq. 0)
 c
       Good12 = Good12 .and. (wsnr .ge. minw1w2snr) .and. (wabmap .eq. 0)
 c
       GoCat = Good1 .or. Good2 .or. Good12
+c
       if (GoCat) then
-        OutLine = NamStr//Line(IFa(ncol1):IFb(34))
-     +            //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +            //Line(IFa(135):IFb(203))
-        write(20,'(a)') OutLine(1:lnblnk(OutLine))
+        OutLine = NamStr//Line(IFa(1):IFb(1))
+     +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +         //GalStr
+        if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         nCout = nCout + 1
+        if (GotOutI1) then
+          do 200 k = 1, NFC
+            OutLine(IFaC(k):IFaC(k)) = '|'
+200       continue
+210       k = index(OutLine,'null')
+          if (k .gt. 0) then
+            OutLine(k:k+3) = '    '
+            go to 210
+          end if
+          Line = ''
+          n = 0
+          do 220 k = 1, lnblnk(OutLine)
+            if (OutLine(k:k) .ne. ' ') then
+              n = n + 1
+              Line(n:n) = OutLine(k:k)
+            end if
+220       continue
+          write (24,'(a)') Line(1:lnblnk(Line))//'|'
+        end if
       else
-        OutLine = NamStr//Line(IFa(ncol1):IFb(34))
-     +            //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(121))
-     +            //Line(IFa(135):IFb(204))
-        write(22,'(a)') OutLine(1:lnblnk(OutLine))
+        OutLine = NamStr//Line(IFa(1):IFb(1))
+     +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
+     +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
+     +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
+     +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
+     +         //GalStr
+        if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
         nRout = nRout + 1
+        if (GotOutI2) then
+          do 300 k = 1, NFC
+            OutLine(IFaR(k):IFaR(k)) = '|'
+300       continue
+310       k = index(OutLine,'null')
+          if (k .gt. 0) then
+            OutLine(k:k+3) = '    '
+            go to 310
+          end if
+          Line = ''
+          n = 0
+          do 320 k = 1, lnblnk(OutLine)
+            if (OutLine(k:k) .ne. ' ') then
+              n = n + 1
+              Line(n:n) = OutLine(k:k)
+            end if
+320       continue
+          write (26,'(a)') Line(1:lnblnk(Line))//'|'
+        end if
       end if
 c
       go to 10
@@ -379,27 +489,31 @@ c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                              ! update source counts in output headers
 1000  print *,' No. data rows processed:    ', nSrc
 c
-      close(20)     
-      close(22)     
-      open (20, file = OutCnam, access = 'DIRECT', recl = 1,
-     +      form = 'UNFORMATTED', status = 'OLD', err = 3003)
-      write (NumStr,'(I6)') nCout
-      do 1050 n = 1, LenHdrNsrc-7
-        Write(20, rec = 7+n) ' '
-1050  continue
-      do 1100 n = 1, 6
-        Write(20, rec = 7+n) NumStr(n:n)
-1100  continue
+      if (GotOut1) then
+        close(20)     
+        open (20, file = OutCnam, access = 'DIRECT', recl = 1,
+     +        form = 'UNFORMATTED', status = 'OLD', err = 3003)
+        write (NumStr,'(I6)') nCout
+        do 1050 n = 1, LenHdrNsrc-7
+          Write(20, rec = 7+n) ' '
+1050    continue
+        do 1100 n = 1, 6
+          Write(20, rec = 7+n) NumStr(n:n)
+1100    continue
+      end if
 c
-1200  open (22, file = OutRnam, access = 'DIRECT', recl = 1,
-     +      form = 'UNFORMATTED', status = 'OLD', err = 3004)
-      write (NumStr,'(I6)') nRout
-      do 1250 n = 1, LenHdrNsrc-7
-        Write(22, rec = 7+n) ' '
-1250  continue
-      do 1300 n = 1, 6
-        Write(22, rec = 7+n) NumStr(n:n)
-1300  continue
+1200  if (GotOut2) then
+        close(22)     
+        open (22, file = OutRnam, access = 'DIRECT', recl = 1,
+     +        form = 'UNFORMATTED', status = 'OLD', err = 3004)
+        write (NumStr,'(I6)') nRout
+        do 1250 n = 1, LenHdrNsrc-7
+          Write(22, rec = 7+n) ' '
+1250    continue
+        do 1300 n = 1, 6
+          Write(22, rec = 7+n) NumStr(n:n)
+1300    continue
+      end if
 c
 1400  if (nSrc .ne. nSrcHdr) then
         print *,
@@ -418,8 +532,10 @@ c
         write (33,'(a,i9)') 'header "\nSrc" value:', nSrcHdr
         write (33,'(a,i9)') 'actual source count: ', nSrc
       end if
-      print *,' No. output catalog sources: ', nCout  
-      print *,' No. output reject sources:  ', nRout
+      if (GotOut1 .or. GotOutI1)  
+     +    print *,' No. output catalog sources: ', nCout  
+      if (GotOut2 .or. GotOutI2)
+     +    print *,' No. output reject sources:  ', nRout
       if (nNamCollisn .gt. 0) print *,
      +  ' No. output name collisions: ', nNamCollisn 
 c
@@ -679,4 +795,28 @@ c
 c
       return
       end
+c
+c=======================================================================
+c
+      subroutine Cel2Gal(RA, Dec, Long, Lat)
+c
+      real*8 RA, Dec, Long, Lat, RA0, cDec0, sDec0, Long0, d2r,
+     +       cRA, cDec, sRA, sDec
+c
+      data d2r/1.745329252d-2/, RA0/192.8595d0/, sDec0/0.4559861d0/,
+     +     cDec0/0.889987d0/, Long0/122.9320d0/
+c
+c-----------------------------------------------------------------------
+c
+      cRA   = dcos(d2r*(RA-RA0))
+      cDec  = dcos(d2r*Dec)
+      sRA   = dsin(d2r*(RA-RA0))
+      sDec  = dsin(d2r*Dec)
+c      
+      Lat  = dasin(sDec0*sDec + cDec0*cDec*cRA)/d2r
+      Long = Long0 - datan2(cDec*sRA,cDec0*sDec - sDec0*cDec*cRA)/d2r
       
+      if (Long .lt. 0.0d0) Long = Long + 360.0d0
+c
+      return
+      end
