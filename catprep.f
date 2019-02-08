@@ -16,6 +16,7 @@ c                  decoupled the four output options; coded final column
 c                  retention; added "-v" option for 2-char version ID to
 c                  be imnplanted into "source_id"; removed "-n1" option;
 c                  added "glon" & "glat" to end of data rows
+c     1.41 B90207: fixed bug in IRSA C/R bar placements
 c
 c=======================================================================
 c
@@ -44,7 +45,7 @@ c
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
      +               GotOutI2
 c
-      Data Vsn/'1.4  B90207'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.41 B90207'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
@@ -300,7 +301,7 @@ c                                      ! process header lines
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
      +           //'|    glon   |    glat   |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
-          call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
+          call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
           OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
@@ -308,7 +309,7 @@ c                                      ! process header lines
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    glon   |    glat   |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
-          call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
+          call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
         end if
         if (nHead .eq. 2) then 
           OutLine = '|        char        '//Line(IFa(1):IFb(1))
@@ -463,7 +464,7 @@ c
         if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
         nRout = nRout + 1
         if (GotOutI2) then
-          do 300 k = 1, NFC
+          do 300 k = 1, NFR
             OutLine(IFaR(k):IFaR(k)) = '|'
 300       continue
 310       k = index(OutLine,'null')
