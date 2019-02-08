@@ -6,7 +6,8 @@ echo
 echo Wrapper Started at:
 echo $startTime
 echo
-echo Version 1.0  
+echo Version 1.4 B90207 updated catalog_path_name reject_path_name, added -v -ci and -ri option 
+#TODO make arguments a variable
 echo
 echo This Wrapper will wrap around and run:
 echo 1\) catprep 
@@ -14,17 +15,12 @@ echo 1\) catprep
 #check hyphenated argument
 @ i = 0
 set rsyncSet = "false"
-set gsaSet = "false"
 set withinMode2 = "false"  # Used to determine if mode 3 is being called within mode 2
 while ($i < $# + 1)
      #user input nameslist -nl argument
       if("$argv[$i]" == "-rsync") then
         echo Argument "-rsync" detected. Will rsync Tyto, Otus, and Athene.
         set rsyncSet = "true"
-      endif
-      if("$argv[$i]" == "-gsa") then
-        echo Argument "-gsa" detected. Will call gsa in do-ab_gsa.tcsh
-        set gsaSet = "true"
       endif
       if("$argv[$i]" == "-withinMode2") then
         echo Argument "-withinMode2" detected. 
@@ -41,9 +37,9 @@ if ($# < 2) then
         echo ""
         echo "ERROR: not enough arguments:"
         echo Mode 2 call:
-        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
+        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version'
         echo Mode 3 call:
-        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
+        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version'
         echo
         echo Exiting...
         exit
@@ -54,14 +50,14 @@ if ($# < 2) then
 else if ($1 == 2) then
 	set InputsList = $2
 	set mdex_path = $3	
-	set catalog_tile_name = $4
-	set reject_file_name = $5
+	set catalog_path_name = $4
+	set reject_path_name = $5
 	set Version = $6
         
 	echo Inputs list == $InputsList
 	echo mdex_path == $mdex_path
-        echo catalog_tile_name == $catalog_tile_name
-        echo reject_file_name == $reject_file_name
+        echo catalog_path_name == $catalog_path_name
+        echo reject_path_name == $reject_path_name
 	echo Version = $Version
 	echo
 
@@ -78,6 +74,15 @@ else if ($1 == 2) then
                 echo Exiting...
                 exit
         endif
+	#check if version is 2 characters long
+	set Ver_Length = `echo $Version | awk '{print length($0)}'`
+	echo Ver_Length = $Ver_Length
+        if($Ver_Length != 2) then
+                echo ERROR: Version = $Version is not 2 characters. ${#Version} .
+                echo
+                echo Exiting...
+                exit
+        endif
 	echo
 	echo Going to Mode2
 	echo
@@ -86,14 +91,14 @@ else if ($1 == 2) then
 else if ($1 == 3) then
 	set RadecID = $2
 	set mdex_path = $3	
-	set catalog_tile_name = $4
-	set reject_file_name = $5
+	set catalog_path_name = $4
+	set reject_path_name = $5
 	set Version = $6
 
 	echo RadecID == $RadecID
 	echo mdex_path == $mdex_path
-        echo catalog_tile_name == $catalog_tile_name
-        echo reject_file_name == $reject_file_name
+        echo catalog_path_name == $catalog_path_name
+        echo reject_path_name == $reject_path_name
 	echo Version = $Version
 
         #if directories dont exist, throw error
@@ -103,14 +108,23 @@ else if ($1 == 3) then
                 echo Exiting...
                 exit
         endif
-        if(! -d $catalog_tile_name) then
-                echo ERROR: Output Path directory $catalog_tile_name does not exist.
+        if(! -d $catalog_path_name) then
+                echo ERROR: Output Path directory $catalog_path_name does not exist.
                 echo
                 echo Exiting...
                 exit
         endif
-        if(! -d $reject_file_name) then
-                echo ERROR: Output Path directory $reject_file_name does not exist.
+        if(! -d $reject_path_name) then
+                echo ERROR: Output Path directory $reject_path_name does not exist.
+                echo
+                echo Exiting...
+                exit
+        endif
+	#check if version is 2 characters long
+	set Ver_Length = `echo $Version | awk '{print length($0)}'`
+	echo Ver_Length = $Ver_Length
+        if($Ver_Length != 2) then
+                echo ERROR: Version = $Version is not 2 characters.
                 echo
                 echo Exiting...
                 exit
@@ -126,9 +140,9 @@ else
 	echo
         echo "ERROR mode 2, or 3 not selected"
         echo "Mode 2 call:"
-        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'
+        echo './catprep_wrapper.tcsh 2 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version'
 	echo "Mode 3 call:"
-        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version'	
+        echo './catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version'	
 	echo
         echo Exiting...
 	exit
@@ -143,25 +157,14 @@ Mode2:
      
         echo "Current TileName == "${RadecID}
         echo Calling catprep_wrapper.tcsh Mode3 on ${RadecID}\: 
-	if($gsaSet == "true") then
-		if($rsyncSet == "true") then
-			echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -rsync -gsa -withinMode2"
-			(echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -rsync -gsa \
-				-withinMode2) &
-		else
-			echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -gsa -withinMode2"
-			(echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -gsa -withinMode2) &
-		endif
+	if($rsyncSet == "true") then
+	    echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version -withinMode2 -rsync"
+	    (echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version -withinMode2 -rsync) &
 	else
-		if($rsyncSet == "true") then
-			echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -rsync -withinMode2"
-			(echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -rsync -withinMode2) &
-		else
-			echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -withinMode2"
-			(echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_tile_name $reject_file_name $Version -withinMode2) &
-		endif
-	
+	    echo "${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version -withinMode2"
+	    (echo y | ${wrapperDir}/catprep_wrapper.tcsh 3 ${RadecID} ${mdex_path} $catalog_path_name $reject_path_name $Version -withinMode2) &
 	endif
+	
 	
 	set maxInParallel = 12
         if(`ps -ef | grep catprep_wrapper | wc -l` > $maxInParallel + 1) then
@@ -182,7 +185,7 @@ Mode2:
 
     #wait for background processes to finish
     wait
-    echo catprep_wrapper wrapper finished
+    echo catprep_wrapper finished
     echo
     goto Done
 
@@ -204,15 +207,15 @@ Mode3:
 	echo RestOfTablename = $RestOfTablename
 	
 	# Unzip the gzipped ${mdex_tile}
-	echo Unzipping ${mdex_tile} to ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl
-	gunzip -f -c -k ${mdex_tile} > ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl  # Unzip mdex file
+	echo Unzipping ${mdex_tile} to ${catalog_path_name}/${RadecID}${RestOfTablename}.tbl
+	gunzip -f -c -k ${mdex_tile} > ${catalog_path_name}/${RadecID}${RestOfTablename}.tbl  # Unzip mdex file
 
 	# Set mdex_name to unzipped mdex file
-	set mdex_name = `ls -tr1 ${catalog_tile_name} | grep ${RadecID} | tail -1`
-	set mdex_tile = ${catalog_tile_name}/${mdex_name}
+	set mdex_name = `ls -tr1 ${catalog_path_name} | grep ${RadecID} | tail -1`
+	set mdex_tile = ${catalog_path_name}/${mdex_name}
 
-	echo "/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rej_${Version}"
-	/Volumes/CatWISE1/jwf/src/catprep/catprep -i $mdex_tile -c $catalog_tile_name/${edited_mdexName}_cat_${Version} -r $reject_file_name/${edited_mdexName}_rej_${Version}
+	echo "/Users/CatWISE/Catprep/Catprep/catprep -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}_irsa  -ri $reject_path_name/${edited_mdexName}_rej_${Version}_irsa -v ${Version}"
+	/Users/CatWISE/Catprep/Catprep/catprep -t ${RadecID} -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}_irsa  -ri $reject_path_name/${edited_mdexName}_rej_${Version}_irsa -v ${Version}
 	set saved_status = $? # Error Checking
 	echo catprep return status == ${saved_status}
         if($saved_status != 0) then #if program failed, status != 0
@@ -221,6 +224,9 @@ Mode3:
                 goto Failed
         endif
 	echo
+
+	gzip -f $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl
+	gzip -f $reject_path_name/${edited_mdexName}_rej_${Version}.tbl
 
 	goto Mode3_Done #gzip_done
 
@@ -237,63 +243,93 @@ Mode3_Done:
 echo catprep_wrapper on ${RadecID} Mode: ${1} Done
 set endTime = `date '+%m/%d/%Y %H:%M:%S'`
 #rm af file and rm original mdex table
-echo "rm -f ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl"
-rm -f ${catalog_tile_name}/${RadecID}${RestOfTablename}.tbl
+echo "rm -f ${catalog_path_name}/${RadecID}${RestOfTablename}.tbl"
+rm -f ${catalog_path_name}/${RadecID}${RestOfTablename}.tbl
 echo
        #rsync step
 	if($rsyncSet == "true") then
-       #rsync output dir from Current server to other 2 servers (Tyto, Otus, Athene)
-	set CatWISEDir = ${OutputPath}
-        echo running rsync on tile $RadecID
-        set currIP = `dig +short myip.opendns.com @resolver1.opendns.com`
-        echo current IP = $currIP
-        if($currIP == "137.78.30.21") then #Tyto
-                set otus_CatWISEDir = `echo $CatWISEDir | sed 's/tyto1/otus5/g'`
-                set athene_CatWISEDir = `echo $CatWISEDir | sed 's/tyto1/athene5/g'`
+	    #rsync output dir from Current server to other 2 servers (Tyto, Otus, Athene)
+	    set CatalogDir = ${catalog_path_name}
+	    set RejectDir = ${reject_path_name}
+	
+	    echo running rsync on tile $RadecID
+	    set currIP = `dig +short myip.opendns.com @resolver1.opendns.com`
+	    echo current IP = $currIP
+	    if($currIP == "137.78.30.21") then #Tyto
+                set otus_CatalogDir = `echo $CatalogDir | sed 's/CatWISE2/otus5/g'`
+		set otus_RejectDir = `echo $RejectDir | sed 's/CatWISE2/otus5/g'`
+                set athene_CatalogDir = `echo $CatalogDir | sed 's/CatWISE2/athene5/g'`
+		set athene_RejectDir = `echo $RejectDir | sed 's/CatWISE2/athene5/g'`
                 echo You are on Tyto!
 
-               #Transfer Tyto CatWISE/ dir to Otus
-                echo rsync Tyto\'s $CatWISEDir ${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Otus $otus_CatWISEDir
-                ssh ${user}@137.78.80.75 "mkdir -p $otus_CatWISEDir"
-                rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$otus_CatWISEDir
+               #Transfer Tyto Catalog and Reject to Otus
+                echo rsync Tyto\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Otus ${otus_CatalogDir}/
+                ssh ${user}@137.78.80.75 "mkdir -p $otus_CatalogDir"
+                rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.80.75:${otus_CatalogDir}/
+		
+		echo rsync Tyto\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Otus ${otus_RejectDir}/
+                ssh ${user}@137.78.80.75 "mkdir -p $otus_RejectDir"
+                rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.80.75:${otus_RejectDir}/
 
-               #Transfer Tyto CatWISE/ dir to Athene
-                echo rsync Tyto\'s $CatWISEDir ${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Athene $athene_CatWISEDir
-                ssh ${user}@137.78.80.72 "mkdir -p $athene_CatWISEDir"
-                rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$athene_CatWISEDir
+	       #Transfer Tyto Catalog and Reject to Athene
+		echo rsync Tyto\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Athene ${athene_CatalogDir}/
+                ssh ${user}@137.78.80.72 "mkdir -p $athene_CatalogDir"
+                rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.80.72:${athene_CatalogDir}/
 
+		echo rsync Tyto\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Athene ${athene_RejectDir}/
+                ssh ${user}@137.78.80.72 "mkdir -p $athene_RejectDir"
+                rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.80.72:${athene_RejectDir}/
 
-        else if($currIP == "137.78.80.75") then  #Otus
-                set tyto_CatWISEDir = `echo $CatWISEDir | sed 's/otus5/tyto1/g'`
-                set athene_CatWISEDir = `echo $CatWISEDir | sed 's/otus5/athene5/g'`
+	    else if($currIP == "137.78.80.75") then  #Otus
+                set tyto_CatalogDir = `echo $CatalogDir | sed 's/otus5/CatWISE2/g'`
+		set tyto_RejectDir = `echo $RejectDir | sed 's/otus5/CatWISE2/g'`
+                set athene_CatalogDir = `echo $CatalogDir | sed 's/otus5/athene5/g'`
+		set athene_RejectDir = `echo $RejectDir | sed 's/otus5/athene5/g'`
                 echo You are on Otus!
 
-               #Transfer Otus CatWISE/ dir to Tyto
-                echo rsync Otus\'s $CatWISEDir${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Tyto $tyto_CatWISEDir
-                ssh ${user}@137.78.30.21 "mkdir -p $tyto_CatWISEDir"
-                rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$tyto_CatWISEDir
+               #Transfer Otus Catalog and Reject to Tyto
+                echo rsync Otus\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Tyto ${tyto_CatalogDir}/
+                ssh ${user}@137.78.30.21 "mkdir -p $tyto_CatalogDir"
+                rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.30.21:${tyto_CatalogDir}/
 
-               #Transfer Otus CatWISE/ to Athene
-                echo rsync Otus\'s $CatWISEDir ${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Athene $athene_CatWISEDir
-                ssh ${user}@137.78.80.72 "mkdir -p $athene_CatWISEDir"
-                rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$athene_CatWISEDir
+		echo rsync Otus\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Tyto ${tyto_RejectDir}/
+                ssh ${user}@137.78.30.21 "mkdir -p $tyto_RejectDir"
+                rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.30.21:${tyto_RejectDir}/
+		
+               #Transfer Otus Catalog and Reject to Athene
+                echo rsync Otus\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Athene ${athene_CatalogDir}/
+                ssh ${user}@137.78.80.72 "mkdir -p $athene_CatalogDir"
+                rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.80.72:${athene_CatalogDir}/
 
+                echo rsync Otus\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Athene ${athene_RejectDir}/
+                ssh ${user}@137.78.80.72 "mkdir -p $athene_RejectDir"
+                rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.80.72:${athene_RejectDir}/
 
-        else if($currIP == "137.78.80.72") then #Athene
-                set tyto_CatWISEDir = `echo $CatWISEDir | sed 's/athene5/tyto1/g'`
-                set otus_CatWISEDir = `echo $CatWISEDir | sed 's/athene5/otus5/g'`
+	    else if($currIP == "137.78.80.72") then #Athene
+                set tyto_CatalogDir = `echo $CatalogDir | sed 's/athene5/CatWISE2/g'`
+		set tyto_RejectDir = `echo $RejectDir | sed 's/athene5/CatWISE2/g'`
+                set otus_CatalogDir = `echo $CatalogDir | sed 's/athene5/otus5/g'`
+		set otus_RejectDir = `echo $RejectDir | sed 's/athene5/otus5/g'`
                 echo You are on Athene!
                
 	       #Transfer to Tyto
-                echo rsync Athene\'s $CatWISEDir ${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Tyto $tyto_CatWISEDir
-		ssh ${user}@137.78.30.21 "mkdir -p $tyto_CatWISEDir"
-		rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$tyto_CatWISEDir
+                echo rsync Athene\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Tyto ${tyto_CatalogDir}/
+		ssh ${user}@137.78.30.21 "mkdir -p $tyto_CatalogDir"
+		rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.30.21:${tyto_CatalogDir}/
+
+		echo rsync Athene\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Tyto ${tyto_RejectDir}/
+		ssh ${user}@137.78.30.21 "mkdir -p $tyto_RejectDir"
+		rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.30.21:${tyto_RejectDir}/
 
                #Transfer to Otus
-                echo rsync Athene\'s $CatWISEDir ${RadecID}${RestOfTablename}_ab.tbl.gz, gsa-${RadecID}-af.txt, unwise-${RadecID}-msk.fit to Otus $otus_CatWISEDir
-                ssh ${user}@137.78.80.75 "mkdir -p $otus_CatWISEDir"
-                rsync -avur $CatWISEDir/ ${user}@137.78.80.75:$otus_CatWISEDir
-        endif
+                echo rsync Athene\'s $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz to Otus ${otus_CatalogDir}/
+                ssh ${user}@137.78.80.75 "mkdir -p $otus_CatalogDir"
+                rsync -avu $catalog_path_name/${edited_mdexName}_cat_${Version}.tbl.gz ${user}@137.78.80.75:${otus_CatalogDir}/
+		
+		echo rsync Athene\'s $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz to Otus ${otus_RejectDir}/
+                ssh ${user}@137.78.80.75 "mkdir -p $otus_RejectDir"
+                rsync -avu $reject_path_name/${edited_mdexName}_rej_${Version}.tbl.gz ${user}@137.78.80.75:${otus_RejectDir}/
+	    endif
         endif
 
 
