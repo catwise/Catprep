@@ -6,7 +6,7 @@ echo
 echo Wrapper Started at:
 echo $startTime
 echo
-echo Version 1.4 B90207 updated catalog_path_name reject_path_name, added -v -ci and -ri option 
+echo Version 1.4.1 B90207 updated catalog_path_name reject_path_name, added -v -ci and -ri option, added .bar to IRSA output 
 #TODO make arguments a variable
 echo
 echo This Wrapper will wrap around and run:
@@ -214,8 +214,8 @@ Mode3:
 	set mdex_name = `ls -tr1 ${catalog_path_name} | grep ${RadecID} | tail -1`
 	set mdex_tile = ${catalog_path_name}/${mdex_name}
 
-	echo "/Users/CatWISE/Catprep/Catprep/catprep -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}_irsa  -ri $reject_path_name/${edited_mdexName}_rej_${Version}_irsa -v ${Version}"
-	/Users/CatWISE/Catprep/Catprep/catprep -t ${RadecID} -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}_irsa  -ri $reject_path_name/${edited_mdexName}_rej_${Version}_irsa -v ${Version}
+	echo "/Users/CatWISE/Catprep/Catprep/catprep -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}.bar  -ri $reject_path_name/${edited_mdexName}_rej_${Version}.bar -v ${Version}"
+	/Users/CatWISE/Catprep/Catprep/catprep -t ${RadecID} -i $mdex_tile -c $catalog_path_name/${edited_mdexName}_cat_${Version} -r $reject_path_name/${edited_mdexName}_rej_${Version} -ci $catalog_path_name/${edited_mdexName}_cat_${Version}.bar  -ri $reject_path_name/${edited_mdexName}_rej_${Version}.bar -v ${Version}
 	set saved_status = $? # Error Checking
 	echo catprep return status == ${saved_status}
         if($saved_status != 0) then #if program failed, status != 0
