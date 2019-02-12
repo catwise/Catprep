@@ -17,6 +17,9 @@ c                  retention; added "-v" option for 2-char version ID to
 c                  be imnplanted into "source_id"; removed "-n1" option;
 c                  added "glon" & "glat" to end of data rows
 c     1.41 B90207: fixed bug in IRSA C/R bar placements
+c     1.5  B90212: renamed elon & elat to elon_avg & elat_avg, added new
+c                  elat & elon obtained from stationary ra & dec, and
+c                  moved p column to the end of the row
 c
 c=======================================================================
 c
@@ -27,7 +30,7 @@ c
       Character*500  InFNam, OutCnam, OutRnam, OutCInam, OutRInam, NLnam
       Character*50   MaskPath
       Character*25   Field(MaxFld), FieldC(MaxFld), FieldR(MaxFld)
-      Character*24   GalStr
+      Character*24   GalStr, EclStr
       Character*21   NamStr
       Character*20   names(250000), nam! dynamic allocation won't work
       Character*11   Vsn, NumStr
@@ -35,7 +38,7 @@ c
       Character*4    Flag, Flag0
       Character*2    vc
       Real *8        wsnr, minw1snr, minw2snr, ra, dec, minw1w2snr,
-     +               GaLong, GaLat 
+     +               GaLong, GaLat, EcLong, EcLat
       Integer*4      IArgC, LNBlnk, nHead, nArg, nArgs, IFa(MaxFld),
      +               IFb(MaxFld), NF, nSrcHdr, n, k, i, nSrc, nCout,
      +               nRout, nNamCollisn, nAppChar, wccmap, wabmap,
@@ -45,7 +48,7 @@ c
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
      +               GotOutI2
 c
-      Data Vsn/'1.41 B90207'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.5  B90212'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
@@ -292,14 +295,16 @@ c                                      ! process header lines
      +                  //CDate//' at '//CTime
           if (GotOut2) write(22,'(a)') '\ catprep vsn '//Vsn//' run on '
      +                  //CDate//' at '//CTime
-          Line(IFa(8):IFb(8)) = '|   wx   '
-          Line(IFa(9):IFb(9)) = '|   wy   '
+          Line(IFa(8):IFb(8))     = '|   wx   '
+          Line(IFa(9):IFb(9))     = '|   wy   '
+          Line(IFa(171):IFb(171)) = '| elon_avg '
+          Line(IFa(173):IFb(173)) = '| elat_avg '
           OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
-     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
-     +           //'|    glon   |    glat   |'
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +       //'|    glon   |    glat   |    elon   |    elat   |   P |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
           OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
@@ -307,7 +312,7 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|    glon   |    glat   |'
+     +       //'|    glon   |    glat   |    elon   |    elat   |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
         end if
@@ -316,15 +321,15 @@ c                                      ! process header lines
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
-     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
-     +           //'|  double   |  double   |'
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +       //'|  double   |  double   |  double   |  double   |   i |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|        char        '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|  double   |  double   |'
+     +           //'|  double   |  double   |  double   |  double   |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         if (nHead .eq. 3) then 
@@ -332,15 +337,15 @@ c                                      ! process header lines
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
-     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
-     +           //'|    deg    |    deg    |'
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +       //'|    deg    |    deg    |    deg    |    deg    |   - |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|    deg    |    deg    |'
+     +           //'|    deg    |    deg    |    deg    |    deg    |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         if (nHead .eq. 4) then 
@@ -348,15 +353,15 @@ c                                      ! process header lines
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
-     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
-     +           //'|     --    |     --    |'
+     +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +       //'|     --    |     --    |     --    |     --    | null|'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|     --    |     --    |'
+     +           //'|     --    |     --    |     --    |     --    |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         go to 10
@@ -386,6 +391,8 @@ c                                      ! Generate sexagesimal name
 c                                      ! get galactic coordinates
       call Cel2Gal(ra, dec, GaLong, GaLat)
       write(GalStr,'(2f12.6)') GaLong, GaLat
+      call Cel2Ec(ra, dec, EcLong, EcLat)
+      write(EclStr,'(2f12.7)') EcLong, EcLat
 c                                      ! implant version code
       k = index(Line,'-')
       Line(k+3:k+9) = Line(k:k+6)
@@ -432,7 +439,7 @@ c
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +         //GalStr
+     +         //GalStr//EclStr
         if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         nCout = nCout + 1
         if (GotOutI1) then
@@ -459,8 +466,8 @@ c
      +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
-     +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(204))
-     +         //GalStr
+     +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
+     +         //GalStr//EclStr//Line(IFa(204):IFb(204))
         if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
         nRout = nRout + 1
         if (GotOutI2) then
@@ -544,6 +551,9 @@ c
       call signoff('catprep')
       stop
 c
+c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+c                              ! error handling
+
 3000  print *,'ERROR: end-of-file encountered during sanity check'
       call exit(64)
 c
@@ -818,6 +828,47 @@ c
       Long = Long0 - datan2(cDec*sRA,cDec0*sDec - sDec0*cDec*cRA)/d2r
       
       if (Long .lt. 0.0d0) Long = Long + 360.0d0
+c
+      return
+      end
+c
+c=======================================================================
+c
+      subroutine Cel2Ec(RA, Dec, Long, Lat)
+c
+      real*8 RA, Dec, Long, Lat, SOb, Cob, X, Y, Z, d2r,
+     +       cRA, cDec, sRA, sDec, X2, Y2
+c
+c   Obliquity in J2000: 23.43927944 deg = 8.4381406d4 arcsec  
+c
+      data d2r/1.745329252d-2/, cOb, sOb/0.917482143d0, 0.397776969d0/
+c
+c Ref: Celest Mech Dyn Astr (2011) 110:293–304
+c      DOI 10.1007/s10569-011-9352-4
+c      SPECIAL REPORT
+c      The IAU 2009 system of astronomical constants:
+c      the report of the IAU working group on numerical
+c      standards for Fundamental Astronomy
+c      https://link.springer.com/content/pdf/10.1007%2Fs10569-011-9352-4.pdf
+c
+c-----------------------------------------------------------------------
+c
+      cRA   = dcos(d2r*RA)
+      cDec  = dcos(d2r*Dec)
+      sRA   = dsin(d2r*RA)
+      sDec  = dsin(d2r*Dec)
+c
+      X =  sDec
+      Y = -cDec*sRA
+      Z =  cDec*cRA
+c
+      X2 =  X*Cob + Y*Sob
+      Y2 = -X*Sob + Y*Cob
+c     Z2 =  Z
+c
+      Lat  = dasin(X2)/d2r
+      Long = datan2(-Y2,Z)/d2r
+      if (Long .lt. 0.0) Long = Long + 360.0
 c
       return
       end
