@@ -18,8 +18,9 @@ c                  be imnplanted into "source_id"; removed "-n1" option;
 c                  added "glon" & "glat" to end of data rows
 c     1.41 B90207: fixed bug in IRSA C/R bar placements
 c     1.5  B90212: renamed elon & elat to elon_avg & elat_avg, added new
-c                  elat & elon obtained from stationary ra & dec, and
+c                  elon & elat obtained from stationary ra & dec, and
 c                  moved p column to the end of the row
+c     1.6  B90518: include "n" in null removal from bar files
 c
 c=======================================================================
 c
@@ -48,7 +49,7 @@ c
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
      +               GotOutI2
 c
-      Data Vsn/'1.5  B90212'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.6  B90514'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
@@ -312,7 +313,7 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +       //'|    glon   |    glat   |    elon   |    elat   |'
+     +           //'|    glon   |    glat   |    elon   |    elat   |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
         end if
@@ -451,7 +452,7 @@ c
             OutLine(k:k+3) = '    '
             go to 210
           end if
-          Line = ''
+215       Line = ''
           n = 0
           do 220 k = 1, lnblnk(OutLine)
             if (OutLine(k:k) .ne. ' ') then
@@ -459,6 +460,12 @@ c
               Line(n:n) = OutLine(k:k)
             end if
 220       continue
+          k = index(Line,'|n|')
+          if (k .gt. 0) then
+            Line(k+1:k+1) = ' '
+            OutLine = Line
+            go to 215
+          end if
           write (24,'(a)') Line(1:lnblnk(Line))//'|'
         end if
       else
@@ -479,7 +486,7 @@ c
             OutLine(k:k+3) = '    '
             go to 310
           end if
-          Line = ''
+315       Line = ''
           n = 0
           do 320 k = 1, lnblnk(OutLine)
             if (OutLine(k:k) .ne. ' ') then
@@ -487,6 +494,12 @@ c
               Line(n:n) = OutLine(k:k)
             end if
 320       continue
+          k = index(Line,'|n|')
+          if (k .gt. 0) then
+            Line(k+1:k+1) = ' '
+            OutLine = Line
+            go to 315
+          end if
           write (26,'(a)') Line(1:lnblnk(Line))//'|'
         end if
       end if
