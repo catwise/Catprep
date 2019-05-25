@@ -20,7 +20,9 @@ c     1.41 B90207: fixed bug in IRSA C/R bar placements
 c     1.5  B90212: renamed elon & elat to elon_avg & elat_avg, added new
 c                  elon & elat obtained from stationary ra & dec, and
 c                  moved p column to the end of the row
-c     1.6  B90518: include "n" in null removal from bar files
+c     1.55 B90518: include "n" in null removal from bar files
+c     1.6  B90525: include "primary" flag in cat/rej separation; added
+c                  "-pc" flag to include "p" column in cat output.
 c
 c=======================================================================
 c
@@ -47,15 +49,15 @@ c
      +               IFaR(MaxFld), IFbR(MaxFld), NFR
       Logical*4      NeedHelp, SanityChk, GotIn, GotOut1, GotOut2, dbg,
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
-     +               GotOutI2
+     +               GotOutI2, CatPcol, Peq1
 c
-      Data Vsn/'1.6  B90514'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.6  B90525'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
      +     DoMaskNam/.false./, tileID/'DayNinny'/,
      +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/,
-     +     GotOutI1,GotOutI2/2*.false./
+     +     GotOutI1,GotOutI2/2*.false./, CatPcol/.false./
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -89,6 +91,7 @@ c
         print *,'    -s12 minimum snr in w1 & w2 together (5)'
         print *,'    -n   name of a catprepin namelist file'
         print *,'    -t   tile ID for use in bitmask name'
+        print *,'    -pc  include "p" column at end of catalog rows (F)'
         print *,'    -d   enable debug mode'
         Print *
         stop
@@ -118,6 +121,10 @@ c                                      ! Turn debug prints on
       else if (Flag .eq. '-D') then
         dbg = .true.
         print *,'Debug prints enabled'
+c                                      ! include "p" col in cat
+      else if (Flag .eq. '-PC') then
+        CatPcol = .true.
+        if (dbg) print *,'include "p" col in cat'
 c
       else if (Flag .eq. '-C') then
         call NextNarg(NArg,Nargs)
@@ -314,6 +321,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    glon   |    glat   |    elon   |    elat   |'
+          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   P |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
         end if
@@ -331,6 +339,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|  double   |  double   |  double   |  double   |'
+          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   i |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         if (nHead .eq. 3) then 
@@ -347,6 +356,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    deg    |    deg    |    deg    |    deg    |'
+          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   - |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         if (nHead .eq. 4) then 
@@ -363,6 +373,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|     --    |     --    |     --    |     --    |'
+          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//' null|'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         go to 10
@@ -401,6 +412,13 @@ c                                      ! implant version code
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Check eligibility for catalog
+      k = 204
+      Peq1 =  (index(Line(IFA(k):IFB(k)),'1') .ne. 0)  ! check primary code
+      if (.not.Peq1) then
+        GoCat = .false.
+        go to 150
+      end if
+c
       k = 20
       if (index(Line(IFA(k):IFB(k)),'null') .eq. 0) then
         Read(Line(IFA(k):IFB(k)), *, err = 3001) wsnr
@@ -434,13 +452,15 @@ c
 c
       GoCat = Good1 .or. Good2 .or. Good12
 c
-      if (GoCat) then
+150   if (GoCat) then
         OutLine = NamStr//Line(IFa(1):IFb(1))
      +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +         //GalStr//EclStr
+        if (CatPcol)
+     +    OutLine = OutLine(1:lnblnk(OutLine))//Line(IFa(204):IFb(204))
         if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         nCout = nCout + 1
         if (GotOutI1) then
