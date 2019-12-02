@@ -1,4 +1,3 @@
-
 c   catprep - read final tile mdex file and generate catalog & reject
 c             output files
 c
@@ -28,19 +27,26 @@ c     1.61 B90525: fixed possible NaN in glat and elat
 c     1.7  B90906: installed SOFA-based eq2gal
 c     1.8  B90909: force PMRA and PMDec to F10.5 format, clip to
 c                  range -99.99999 to 99.99999
+c     1.82 B91128: changed source name & collision handling; add one
+c                  digit of precision to RA & Dec; tweak least
+c                  significant digits to resolve name conflicts
+c     1.82 B91128: changed source name & collision handling; back to
+c                  previous names, but append "a" to first source with
+c                  colliding name if there is a "b" or more; buffer
+c                  output lines in memory until termination to do this.
 c
 c=======================================================================
 c
-                     Integer*4  MaxFld
-                     Parameter (MaxFld = 1000)
+                     Integer*4  MaxFld, MaxRows
+                     Parameter (MaxFld = 1000, MaxRows = 250000)
 c
-      Character*5000 Line, OutLine
+      Character*2500 Line, OutLine, OutLines(MaxRows)
       Character*500  InFNam, OutCnam, OutRnam, OutCInam, OutRInam, NLnam
       Character*50   MaskPath
       Character*25   Field(MaxFld), FieldC(MaxFld), FieldR(MaxFld)
       Character*24   GalStr, EclStr
       Character*21   NamStr
-      Character*20   names(250000), nam! dynamic allocation won't work
+      Character*20   names(MaxRows), nam! dynamic allocation won't work
       Character*11   Vsn, NumStr
       Character*8    CDate, CTime, tileID
       Character*4    Flag, Flag0
@@ -54,15 +60,16 @@ c
      +               IFaR(MaxFld), IFbR(MaxFld), NFR
       Logical*4      NeedHelp, SanityChk, GotIn, GotOut1, GotOut2, dbg,
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
-     +               GotOutI2, CatPcol, Peq1
+     +               GotOutI2, CatPcol, Peq1, IzCat(MaxRows)
 c
-      Data Vsn/'1.8  B90909'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.82 B91128'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
      +     DoMaskNam/.false./, tileID/'DayNinny'/,
      +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/,
-     +     GotOutI1,GotOutI2/2*.false./, CatPcol/.false./
+     +     GotOutI1,GotOutI2/2*.false./, CatPcol/.false./,
+     +     IzCat/MaxRows*.false./
 c
       Common / VDT / CDate, CTime, Vsn
 c
@@ -279,7 +286,7 @@ c
       if (GotOutI1) open(24, file = OutCInam)
       if (GotOutI2) open(26, file = OutRInam)
 c                                      ! process header lines
-10    read (10, '(a)', end=1000) Line
+10    read (10, '(a)', end=500) Line
       if (Line(1:1) .eq. '\') then
         if (doMaskNam) then
           if (index(Line,'artifact bitmasks from') .gt. 0) then
@@ -296,6 +303,13 @@ c                                      ! process header lines
           LenHdrNsrc = lnblnk(Line)
           n = index(Line,'=') + 1
           read (Line(n:lnblnk(Line)), *, err = 3002) nSrcHdr
+          if (nSrcHdr .gt. MaxRows) then
+            print *,'ERROR: Header \nSrc line: "'
+     +        //Line(1:lnblnk(Line))//'", greater than MaxRows:',
+     +          MaxRows
+            print *,'Increase the MaxRows parameter in catprep'
+            call exit(64)
+          end if
           if (dbg) print *,'Header \nSrc line: "'
      +        //Line(1:lnblnk(Line))//'"'
         end if        
@@ -393,11 +407,14 @@ c                                      ! Generate sexagesimal name
       Read(Line(IFA(k):IFB(k)), *, err = 3001) dec
       call SexagesNam(ra, dec, nam)
 100   if (nSrc .gt. 1) then
-        nAppChar = 97
-110     do 120 k = 1, nSrc-1
-          If (nam .eq. names(k)) then
-            if (nAppChar .eq. 97) nNamCollisn = nNamCollisn + 1
-            nAppChar    = nAppChar    + 1
+        nAppChar = 97                  ! we could probably speed this
+110     do 120 k = 1, nSrc-1           ! search up by not starting from
+          If (nam .eq. names(k)) then  ! the top every time, but the pgm
+            if (nAppChar .eq. 97) then ! is pretty fast, so what the heck
+              nNamCollisn = nNamCollisn + 1
+              OutLines(k)(21:21) = achar(nAppChar)
+            end if
+            nAppChar   = nAppChar    + 1
             nam(20:20) = achar(nAppChar)
             go to 110
           end if
@@ -458,6 +475,7 @@ c
       GoCat = Good1 .or. Good2 .or. Good12
 c
 150   if (GoCat) then
+        IzCat(nSrc) = .true.
         OutLine = NamStr//Line(IFa(1):IFb(1))
      +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
@@ -478,33 +496,8 @@ c
           if (pm .gt.  99.99999) pm =  99.99999
           write(OutLine(IFaC(127):IFbC(127)), '(F10.5)') pm
         end if
-        if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
-        nCout = nCout + 1
-        if (GotOutI1) then
-          do 200 k = 1, NFC
-            OutLine(IFaC(k):IFaC(k)) = '|'
-200       continue
-210       k = index(OutLine,'null')
-          if (k .gt. 0) then
-            OutLine(k:k+3) = '    '
-            go to 210
-          end if
-215       Line = ''
-          n = 0
-          do 220 k = 1, lnblnk(OutLine)
-            if (OutLine(k:k) .ne. ' ') then
-              n = n + 1
-              Line(n:n) = OutLine(k:k)
-            end if
-220       continue
-          k = index(Line,'|n|')
-          if (k .gt. 0) then
-            Line(k+1:k+1) = ' '
-            OutLine = Line
-            go to 215
-          end if
-          write (24,'(a)') Line(1:lnblnk(Line))//'|'
-        end if
+c       if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine)) ! JWF B91128
+        OutLines(nSrc) = OutLine                                ! JWF B91128
       else
         OutLine = NamStr//Line(IFa(1):IFb(1))
      +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
@@ -524,40 +517,76 @@ c
           if (pm .gt.  99.99999) pm =  99.99999
           write(OutLine(IFaC(127):IFbC(127)), '(F10.5)') pm
         end if
-        if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
-        nRout = nRout + 1
-        if (GotOutI2) then
-          do 300 k = 1, NFR
-            OutLine(IFaR(k):IFaR(k)) = '|'
-300       continue
-310       k = index(OutLine,'null')
-          if (k .gt. 0) then
-            OutLine(k:k+3) = '    '
-            go to 310
-          end if
-315       Line = ''
-          n = 0
-          do 320 k = 1, lnblnk(OutLine)
-            if (OutLine(k:k) .ne. ' ') then
-              n = n + 1
-              Line(n:n) = OutLine(k:k)
-            end if
-320       continue
-          k = index(Line,'|n|')
-          if (k .gt. 0) then
-            Line(k+1:k+1) = ' '
-            OutLine = Line
-            go to 315
-          end if
-          write (26,'(a)') Line(1:lnblnk(Line))//'|'
-        end if
+c       if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine)) ! JWF B91128
+        OutLines(nSrc) = OutLine                                ! JWF B91128
       end if
 c
       go to 10
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                              ! update source counts in output headers
-1000  print *,' No. data rows processed:    ', nSrc
+500   print *,' No. data rows processed:    ', nSrc
+c
+      do 1000 i = 1, nSrc
+        OutLine = OutLines(i)
+        if (IzCat(i)) then
+          if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine)) 
+          nCout = nCout + 1
+          if (GotOutI1) then
+            do 600 k = 1, NFC
+              OutLine(IFaC(k):IFaC(k)) = '|'
+600         continue
+610         k = index(OutLine,'null')
+            if (k .gt. 0) then
+              OutLine(k:k+3) = '    '
+              go to 610
+            end if
+615         Line = ''
+            n = 0
+            do 620 k = 1, lnblnk(OutLine)
+              if (OutLine(k:k) .ne. ' ') then
+                n = n + 1
+                Line(n:n) = OutLine(k:k)
+              end if
+620         continue
+            k = index(Line,'|n|')
+            if (k .gt. 0) then
+              Line(k+1:k+1) = ' '
+              OutLine = Line
+              go to 615
+            end if
+            write (24,'(a)') Line(1:lnblnk(Line))//'|'
+          end if
+        else
+          if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
+          nRout = nRout + 1
+          if (GotOutI2) then
+            do 700 k = 1, NFR
+              OutLine(IFaR(k):IFaR(k)) = '|'
+700         continue
+710         k = index(OutLine,'null')
+            if (k .gt. 0) then
+              OutLine(k:k+3) = '    '
+              go to 710
+            end if
+715         Line = ''
+            n = 0
+            do 720 k = 1, lnblnk(OutLine)
+              if (OutLine(k:k) .ne. ' ') then
+                n = n + 1
+                Line(n:n) = OutLine(k:k)
+              end if
+720         continue
+            k = index(Line,'|n|')
+            if (k .gt. 0) then
+              Line(k+1:k+1) = ' '
+              OutLine = Line
+              go to 715
+            end if
+            write (26,'(a)') Line(1:lnblnk(Line))//'|'
+          end if
+        end if
+1000  continue
 c
       if (GotOut1) then
         close(20)     
@@ -588,12 +617,12 @@ c
 1400  if (nSrc .ne. nSrcHdr) then
         print *,
      + 'ERROR: this does not match the header "\nSrc" value: ',nSrcHdr
-1001    n = index(InFNam,'/')
+1401    n = index(InFNam,'/')
         if (n .gt. 0) then
-          do 1002 i = 1, n
+          do 1402 i = 1, n
           InFNam(i:i) = ' '
-1002      continue
-          go to 1001
+1402      continue
+          go to 1401
         end if
         InFNam = AdjustL(InFNam)
         open (33, file = 'ERROR_MESSAGE-'
@@ -677,7 +706,7 @@ c-----------------------------------------------------------------------
                      Integer*4  MaxFld
                      Parameter (MaxFld = 1000)
 c
-      character*5000 ColNam
+      character*2500 ColNam
       Character*300  Line
       character*25   Field(MaxFld)
       integer*4      IFa(MaxFld), IFb(MaxFld), NF, N, M, L, K, LNBlnk,
