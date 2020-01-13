@@ -34,19 +34,23 @@ c     1.82 B91128: changed source name & collision handling; back to
 c                  previous names, but append "a" to first source with
 c                  colliding name if there is a "b" or more; buffer
 c                  output lines in memory until termination to do this.
+c     1.83 B91228: eliminate w?fitr [note: not implemented after all]
+c     1.84 C00110: add cross-referenced unwise_objid to output
 c
 c=======================================================================
 c
                      Integer*4  MaxFld, MaxRows
-                     Parameter (MaxFld = 1000, MaxRows = 250000)
+                     Parameter (MaxFld = 1000, MaxRows = 500000)
 c
       Character*2500 Line, OutLine, OutLines(MaxRows)
-      Character*500  InFNam, OutCnam, OutRnam, OutCInam, OutRInam, NLnam
+      Character*500  InFNam, OutCnam, OutRnam, OutCInam, OutRInam,
+     +               NLnam, UnWnam
       Character*50   MaskPath
       Character*25   Field(MaxFld), FieldC(MaxFld), FieldR(MaxFld)
       Character*24   GalStr, EclStr
       Character*21   NamStr
       Character*20   names(MaxRows), nam! dynamic allocation won't work
+      Character*16   unWobjID(MaxRows)
       Character*11   Vsn, NumStr
       Character*8    CDate, CTime, tileID
       Character*4    Flag, Flag0
@@ -57,17 +61,17 @@ c
      +               IFb(MaxFld), NF, nSrcHdr, n, k, i, nSrc, nCout,
      +               nRout, nNamCollisn, nAppChar, wccmap, wabmap,
      +               LenHdrNsrc, IFaC(MaxFld), IFbC(MaxFld), NFC,
-     +               IFaR(MaxFld), IFbR(MaxFld), NFR
+     +               IFaR(MaxFld), IFbR(MaxFld), NFR, nSrcUnW, mdetID
       Logical*4      NeedHelp, SanityChk, GotIn, GotOut1, GotOut2, dbg,
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
-     +               GotOutI2, CatPcol, Peq1, IzCat(MaxRows)
+     +               GotOutI2, CatPcol, Peq1, IzCat(MaxRows), GotUX
 c
-      Data Vsn/'1.82 B91128'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.84 C00110'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
-     +     DoMaskNam/.false./, tileID/'DayNinny'/,
-     +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/,
+     +     DoMaskNam/.false./, tileID/'DayNinny'/,  GotUX/.false./
+     +     MaskPath/'/Volumes/tyto1/Ab_masks_v1/'/, nSrcUnW/0/,
      +     GotOutI1,GotOutI2/2*.false./, CatPcol/.false./,
      +     IzCat/MaxRows*.false./
 c
@@ -79,15 +83,16 @@ c
 c=======================================================================
 c
       nArgs = IArgc()
-      NeedHelp = (nArgs .lt. 4)
+      NeedHelp = (nArgs .lt. 6)
 1     If (NeedHelp) then
         print *,'catprep vsn ', Vsn
         print *
 
         print *,'Usage: catprep <flags specifications>'
         print *
-        print *,'Where the following specification is REQUIRED:'
+        print *,'Where the following specifications are REQUIRED:'
         print *,'    -i  name of a final tile mdex file'
+        print *,'    -x  name of the mdetID/unwise_objid xref file'
         print *
         print *,'and at least one of the following flags and '
      +        //'specifications is REQUIRED:'
@@ -129,6 +134,18 @@ c                                      ! input CatWISE file
           Go to 1
         end if
         GotIn = .true.
+c                                      ! mdetID/unwise_objid xref file
+      else if (Flag .eq. '-X') then
+        call NextNarg(NArg,Nargs)
+        Call GetArg(NArg,UnWnam)
+        if (Access(UnWnam(1:LNBlnk(UnWnam)),' ') .ne. 0) then
+          print *
+          print *,'ERROR: file not found: ', UnWnam(1:LNBlnk(UnWnam))
+          print *
+          NeedHelp = .True.
+          Go to 1
+        end if
+        GotUX = .true.
 c                                      ! Turn debug prints on
       else if (Flag .eq. '-D') then
         dbg = .true.
@@ -249,6 +266,12 @@ c
         NeedHelp = .True.
         Go to 1
       end if
+      if (.not.GotUX) then
+        print *,
+     +  'ERROR: no mdetID/unwise_objid xref file specified ("-x")'
+        NeedHelp = .True.
+        Go to 1
+      end if
       if (.not.(GotOut1 .or. GotOut2 .or. GotOutI1 .or. GotOutI2)) then
         print *, 'ERROR: no output files specified'
         NeedHelp = .True.
@@ -256,10 +279,32 @@ c
       end if
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+c                                      ! Read mdetID/unwise_objid xref
+        open(10, file = UnWnam)
+        read (10,'(a)', end = 3019, err = 3020) Line
+        if (index(Line, 'Nsrcs =') .eq. 0) then
+          print *,'ERROR: bad spec for mdetID/unwise_objid xref file'
+          call exit(64)
+        end if
+        read(Line(9:18),'(i10)', end = 3019, err = 3020) nSrcUnW
+        if (dbg) print *,'No. unWISE sources:', nSrcUnW
+        read (10,'(a)', end = 3019, err = 3020) Line
+        if (index(Line,'unwise_objid') .eq. 0) then
+          print *,'ERROR: bad spec for mdetID/unwise_objid xref file'
+          call exit(64)
+        end if
+        read (10,'(a)', end = 3019, err = 3020) Line
+        do 50 n = 1, nSrcUnW
+          read (10,'(a)', end = 3019, err = 3020) Line
+          unWobjID(n) = Line(9:24)
+50      continue
+        close(10)
+c
+c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                                      ! Sanity Check
-5     open (10, file = InFNam)
-6     read (10,'(a)', end = 3000) Line
-      if (Line(1:1) .eq. '\') go to 6
+      open (10, file = InFNam)
+80    read (10,'(a)', end = 3000) Line
+      if (Line(1:1) .eq. '\') go to 80
       call GetFlds(Line,Field,IFa,IFb,NF)
       rewind(10)
 c
@@ -286,7 +331,7 @@ c
       if (GotOutI1) open(24, file = OutCInam)
       if (GotOutI2) open(26, file = OutRInam)
 c                                      ! process header lines
-10    read (10, '(a)', end=500) Line
+90    read (10, '(a)', end=500) Line
       if (Line(1:1) .eq. '\') then
         if (doMaskNam) then
           if (index(Line,'artifact bitmasks from') .gt. 0) then
@@ -313,7 +358,7 @@ c                                      ! process header lines
           if (dbg) print *,'Header \nSrc line: "'
      +        //Line(1:lnblnk(Line))//'"'
         end if        
-        go to 10
+        go to 90
       end if
       if (Line(1:1) .eq. '|') then
         nHead = nHead + 1
@@ -331,7 +376,8 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +       //'|    glon   |    glat   |    elon   |    elat   |   P |'
+     +           //'|    glon   |    glat   |    elon   |    elat   '
+     +           //'|  unwise_objid  |   P |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
           OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
@@ -339,7 +385,8 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|    glon   |    glat   |    elon   |    elat   |'
+     +           //'|    glon   |    glat   |    elon   |    elat   '
+     +           //'|  unwise_objid  |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   P |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
@@ -350,15 +397,17 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +       //'|  double   |  double   |  double   |  double   |   i |'
+     +           //'|  double   |  double   |  double   |  double   '
+     +           //'|      char      | int |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|        char        '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|  double   |  double   |  double   |  double   |'
-          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   i |'
+     +           //'|  double   |  double   |  double   |  double   '
+     +           //'|      char      |'
+          if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//' int |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
         if (nHead .eq. 3) then 
@@ -367,14 +416,16 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +       //'|    deg    |    deg    |    deg    |    deg    |   - |'
+     +           //'|    deg    |    deg    |    deg    |    deg    '
+     +           //'|        -       |   - |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|    deg    |    deg    |    deg    |    deg    |'
+     +           //'|    deg    |    deg    |    deg    |    deg    '
+     +           //'|        -       |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   - |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
@@ -384,18 +435,20 @@ c                                      ! process header lines
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +       //'|     --    |     --    |     --    |     --    | null|'
+     +           //'|     --    |     --    |     --    |     --    '
+     +           //'|      null      | null|'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +           //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +           //'|     --    |     --    |     --    |     --    |'
+     +           //'|     --    |     --    |     --    |     --    '
+     +           //'|      null      |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//' null|'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
-        go to 10
+        go to 90
       end if
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -474,14 +527,16 @@ c
 c
       GoCat = Good1 .or. Good2 .or. Good12
 c
-150   if (GoCat) then
+150   read (Line(IFa(137):IFb(137)),*,err=3021) mdetID
+c
+      if (GoCat) then
         IzCat(nSrc) = .true.
         OutLine = NamStr//Line(IFa(1):IFb(1))
      +         //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +         //GalStr//EclStr
+     +         //GalStr//EclStr//' '//unWobjID(mdetID)
         if (CatPcol)
      +    OutLine = OutLine(1:lnblnk(OutLine))//Line(IFa(204):IFb(204))
         if (index(OutLine(IFaC(126):IFbC(126)), 'null') .eq. 0) then
@@ -504,7 +559,8 @@ c       if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine)) ! JWF B91128
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +         //GalStr//EclStr//Line(IFa(204):IFb(204))
+     +         //GalStr//EclStr//' '//unWobjID(mdetID)
+     +         //Line(IFa(204):IFb(204))
         if (index(OutLine(IFaC(126):IFbC(126)), 'null') .eq. 0) then
           read (OutLine(IFaC(126):IFbC(126)), *) pm         ! force PMRA to F10.5
           if (pm .lt. -99.99999) pm = -99.99999             ! NOTE PMRA now in col 126
@@ -521,7 +577,7 @@ c       if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine)) ! JWF B91128
         OutLines(nSrc) = OutLine                                ! JWF B91128
       end if
 c
-      go to 10
+      go to 90
 c
 c - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 c                              ! update source counts in output headers
@@ -673,6 +729,16 @@ c
       call exit(64)
 c
 3018  print *,'ERROR: read error encountered in catprepin namelist file'
+      call exit(64)
+c
+3019  print *,'ERROR: EoF encountered in mdetID/unwise_objid xref file'
+      call exit(64)
+c
+3020  print *,'ERROR: read error encountered in mdetID/unwise_objid'
+     +      //' xref  file'
+      call exit(64)
+c
+3021  print *,'ERROR: read error on mdetID for data row no.', nSrc
       call exit(64)
 c
       stop
