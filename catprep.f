@@ -36,6 +36,9 @@ c                  colliding name if there is a "b" or more; buffer
 c                  output lines in memory until termination to do this.
 c     1.83 B91228: eliminate w?fitr [note: not implemented after all]
 c     1.84 C00110: add cross-referenced unwise_objid to output
+c     1.85 C00116: append "r02" to unwise_objid; NOTE: this will be
+c                  ONLY for processing CatWISE data that used the r02
+c                  version of the unWISE catalog
 c
 c=======================================================================
 c
@@ -66,7 +69,7 @@ c
      +               GoCat, Good1, Good2, Good12, DoMaskNam, GotOutI1,
      +               GotOutI2, CatPcol, Peq1, IzCat(MaxRows), GotUX
 c
-      Data Vsn/'1.84 C00110'/, nSrc/0/, nHead/0/, SanityChk/.true./,
+      Data Vsn/'1.85 C00116'/, nSrc/0/, nHead/0/, SanityChk/.true./,
      +     GotIn,GotOut1,GotOut2/3*.false./, nSrcHdr/-9/, dbg/.false./,
      +     nCout,nRout/2*0/, nNamCollisn/0/, minw1w2snr/5.0d0/,
      +     minw1snr,minw2snr/2*5.0d0/, LenHdrNsrc/14/, vc/'a0'/
@@ -377,7 +380,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    glon   |    glat   |    elon   |    elat   '
-     +           //'|  unwise_objid  |   P |'
+     +           //'|    unwise_objid   |   P |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldR,IFaR,IFbR,NFR)
           OutLine = '|    source_name     '//Line(IFa(1):IFb(1))
@@ -386,7 +389,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    glon   |    glat   |    elon   |    elat   '
-     +           //'|  unwise_objid  |'
+     +           //'|    unwise_objid   |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   P |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
           call GetFlds(OutLine,FieldC,IFaC,IFbC,NFC)
@@ -398,7 +401,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|  double   |  double   |  double   |  double   '
-     +           //'|      char      | int |'
+     +           //'|        char       | int |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|        char        '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
@@ -406,7 +409,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|  double   |  double   |  double   |  double   '
-     +           //'|      char      |'
+     +           //'|        char       |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//' int |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
@@ -417,7 +420,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    deg    |    deg    |    deg    |    deg    '
-     +           //'|        -       |   - |'
+     +           //'|          -        |   - |'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
@@ -425,7 +428,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|    deg    |    deg    |    deg    |    deg    '
-     +           //'|        -       |'
+     +           //'|          -        |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//'   - |'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
@@ -436,7 +439,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|     --    |     --    |     --    |     --    '
-     +           //'|      null      | null|'
+     +           //'|        null       | null|'
           if (GotOut2) write(22,'(a)') OutLine(1:lnblnk(OutLine))
           OutLine = '|         --         '//Line(IFa(1):IFb(1))
      +           //Line(IFa(3):IFb(9))//Line(IFa(12):IFb(34))
@@ -444,7 +447,7 @@ c                                      ! process header lines
      +           //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +           //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
      +           //'|     --    |     --    |     --    |     --    '
-     +           //'|      null      |'
+     +           //'|        null       |'
           if (CatPcol) OutLine = OutLine(1:lnblnk(OutLine))//' null|'
           if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine))
         end if
@@ -536,7 +539,7 @@ c
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +         //GalStr//EclStr//' '//unWobjID(mdetID)
+     +         //GalStr//EclStr//' '//unWobjID(mdetID)//'r02'
         if (CatPcol)
      +    OutLine = OutLine(1:lnblnk(OutLine))//Line(IFa(204):IFb(204))
         if (index(OutLine(IFaC(126):IFbC(126)), 'null') .eq. 0) then
@@ -559,7 +562,7 @@ c       if (GotOut1) write(20,'(a)') OutLine(1:lnblnk(OutLine)) ! JWF B91128
      +         //Line(IFa(37):IFb(38))//Line(IFa(40):IFb(43))
      +         //Line(IFa(45):IFb(48))//Line(IFa(50):IFb(121))
      +         //Line(IFa(135):IFb(186))//Line(IFa(188):IFb(203))
-     +         //GalStr//EclStr//' '//unWobjID(mdetID)
+     +         //GalStr//EclStr//' '//unWobjID(mdetID)//'r02'
      +         //Line(IFa(204):IFb(204))
         if (index(OutLine(IFaC(126):IFbC(126)), 'null') .eq. 0) then
           read (OutLine(IFaC(126):IFbC(126)), *) pm         ! force PMRA to F10.5
